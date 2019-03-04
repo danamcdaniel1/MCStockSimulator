@@ -23,3 +23,8 @@ The plots and tables are pretty compelling!  Reader beware:  This code does not 
 "75%" | 362.2 | 30.8 | 70.5
 "90%" | 471.3 | 70.2 | 100.3
 
+
+
+![Randomwalk](https://github.com/danamcdaniel1/MCStockSimulator/blob/master/ROGVX_one_year_random_walk.png)
+
+![Price](https://github.com/danamcdaniel1/MCStockSimulator/blob/master/ROGVX_one_year_price_dist.png)
