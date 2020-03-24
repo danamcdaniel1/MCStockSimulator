@@ -29,17 +29,148 @@ I was inspired by a recent HR policy change at Genentech.  Employees are now emp
 ```{r, echo = F, warning = F, message = F}
 
 # Modeling details:
-stock_ticker <- "ROG.VX"      # IMPORTANT:  which stock do you want to model?
-begin_date   <- "2014-06-01"  # IMPORTANT:  capture historical data starting on this date
+stock_ticker <- "ROG.SW"      # IMPORTANT:  which stock do you want to model?
+begin_date   <- "2016-06-01"  # IMPORTANT:  capture historical data starting on this date
 end_date     <- floor_date(today(), unit = "week") + days(1)  # end on most recent monday
-n_days       <- 252           # IMPORTANT: how many days do you want to model?  252 market days per year
-j_prices     <- 500           # IMPORTANT: how many simulations to estimate returns? 
+n_days       <- 252 * 1       # IMPORTANT: how many days do you want to model?  252 market days per year
+j_prices     <- 750           # IMPORTANT: how many simulations to estimate returns? 
 k_sim        <- 7             # how many simulations to visualize?
+report_percentiles <- 0:20/20 # what percentile performances do we want to view in table?
 
 ```
 
-Equity price estimation for `r stock_ticker` is performed using a log-normal price distribution model.  The price distribution model is constructed from sampling daily ajusted closing price for the stock between `begin date` and `end date`.  These dates were arbitrarily selected based on when I joined gRED as a bioinformatics associate and scientific software specialist.  Daily price fluctuations are modeled as IID in the distribution range, which is consistent with the "random walk" model of stock performance.  This report visualizes `k_sim` random walks for information only.  Equity risk analysis is performed by monte carlo simulating `r j_prices` random walks and looking at the distribution of end-of-period holding prices.
+Equity price estimation for `r stock_ticker` is performed using a log-normal price distribution model.  The price distribution model is constructed from sampling daily ajusted closing price for the stock between `rbegin_date` and `r end_date`.  When I analyze Roche stock, the dates are selected based on when I joined the organization as a contractor.  For other firms, I try to capture time since IPO or the last four years.  Daily price fluctuations are modeled as IID in the distribution range, which is consistent with the "random walk" model of stock performance.  This report visualizes `r k_sim` random walks for information only.  Equity risk analysis is performed by monte carlo simulating `r j_prices` random walks and looking at the distribution of end-of-period holding prices.
 
+```{r, functions}
+
+simulate_closing_price <- function(n_days, price, avg, stdev){
+    deltas        <- rnorm(n_days, avg, stdev)
+    sample_path   <- cumprod(c(price, 1 + deltas))
+    closing_price <- sample_path[1 + n_days]
+    closing_price    
+}
+
+
+simulate_ticker_distribution <- function(stock_ticker="ROG.SW", begin_date = '2014-06-01', end_date = '2020-01-01', n_days = 504, j_prices = 750, report_percentiles = 0:20/20) {
+  
+  stock_raw <- getSymbols(stock_ticker, 
+                          auto.assign = FALSE, 
+                          src = "yahoo",
+                          from = begin_date, 
+                          to = end_date) # this creates an RHHBY object
+  stock_log_returns <- stock_raw %>%   
+    Ad() %>% 
+    dailyReturn(type = 'log')
+  
+  # start simulating prices from most recent date
+  # Simulation parameters
+  
+  stock_avg    <- mean(stock_log_returns)
+  stock_stdev  <- sd(stock_log_returns) 
+  stock_init_price <- stock_raw %>% 
+    Ad() %>% 
+    as.data.frame() %>% 
+    mutate(., date = rownames(.)) %>% 
+    filter(date(date) == max(date)) %>%
+    select(ends_with("Adjusted")) %>%
+    as.numeric()
+  
+  stock_closing_price <- replicate(j_prices, 
+                                   simulate_closing_price(n_days = n_days, 
+                                                          price = stock_init_price, 
+                                                          avg = stock_avg, 
+                                                          stdev = stock_stdev))
+  
+  stock_closing_price_gains_pc    <- 100 * (stock_closing_price - stock_init_price) / stock_init_price
+  stock_closing_price_percentiles <- quantile(stock_closing_price_gains_pc, 
+                                              report_percentiles)
+  
+  tmp <- data.frame(percentile = report_percentiles) %>%
+    mutate(length_days = n_days,
+           start_price = stock_init_price,
+           final_price = quantile(stock_closing_price, report_percentiles),
+           price_fold_change = (final_price - start_price) / start_price)
+  
+  return(tmp)
+}
+```
+#  Simulated performance over multipe time-periods
+
+```{r}
+stock_ticker <-"ROG.SW"
+begin_date <- '2014-01-01'
+end_date     <- floor_date(today(), unit = "week") + days(1)
+num_simulations <- 750
+report_percentiles <- 0:200/200
+hold_length_days <- 252 # num trading days in a year
+
+one_year_hold <- simulate_ticker_distribution(stock_ticker = stock_ticker,
+                                              j_prices = num_simulations,
+                                              begin_date = begin_date,
+                                              n_days = hold_length_days,
+                                              end_date = end_date,
+                                              report_percentiles = report_percentiles)
+two_year_hold <- simulate_ticker_distribution(stock_ticker = stock_ticker,
+                                              j_prices = num_simulations,
+                                              begin_date = begin_date,
+                                              n_days = hold_length_days * 2,
+                                              end_date = end_date,
+                                              report_percentiles = report_percentiles)
+three_year_hold <- simulate_ticker_distribution(stock_ticker = stock_ticker,
+                                              j_prices = num_simulations,
+                                              begin_date = begin_date,
+                                              n_days = hold_length_days * 3,
+                                              end_date = end_date,
+                                              report_percentiles = report_percentiles)
+four_year_hold <- simulate_ticker_distribution(stock_ticker = stock_ticker,
+                                              j_prices = num_simulations,
+                                              begin_date = begin_date,
+                                              n_days = hold_length_days * 4,
+                                              end_date = end_date,
+                                              report_percentiles = report_percentiles)
+five_year_hold <- simulate_ticker_distribution(stock_ticker = stock_ticker,
+                                              j_prices = num_simulations,
+                                              begin_date = begin_date,
+                                              n_days = hold_length_days * 5,
+                                              end_date = end_date,
+                                              report_percentiles = report_percentiles)
+six_year_hold <- simulate_ticker_distribution(stock_ticker = stock_ticker,
+                                              j_prices = num_simulations,
+                                              begin_date = begin_date,
+                                              n_days = hold_length_days * 6,
+                                              end_date = end_date,
+                                              report_percentiles = report_percentiles)
+seven_year_hold <- simulate_ticker_distribution(stock_ticker = stock_ticker,
+                                              j_prices = num_simulations,
+                                              begin_date = begin_date,
+                                              n_days = hold_length_days * 7,
+                                              end_date = end_date,
+                                              report_percentiles = report_percentiles)
+df_list <- list(one_year_hold,
+                two_year_hold,
+                three_year_hold,
+                four_year_hold,
+                five_year_hold,
+                six_year_hold,
+                seven_year_hold)
+
+get_percentile <- function(hold_df) {
+  # this estimates the probability of loss based on MCMC simulation.
+  pos_pctiles <- which(hold_df[, "price_fold_change"] > 0)
+  min_pos_pctile <- hold_df[min(pos_pctiles), "percentile"]
+  return(min_pos_pctile)
+}
+
+loss_prob <- lapply(df_list,
+                               FUN = function(x) get_percentile(x)) %>%
+  unlist()
+
+data.frame(hold_length_years = 1:length(positive_change_prob),
+           prob_of_loss = loss_prob)
+```
+
+
+# manual analysis
 ```{r, echo = F, warnings = F, error = F}
 stock_dat <- getSymbols(stock_ticker, 
                         auto.assign = FALSE, 
@@ -75,14 +206,6 @@ for(sim in 0:(k_sim - 1)) {
     }
 }
 
-
-simulate_closing_price <- function(n_days, price, avg, stdev){
-    deltas        <- rnorm(n_days, avg, stdev)
-    sample_path   <- cumprod(c(price, 1 + deltas))
-    closing_price <- sample_path[1 + n_days]
-    closing_price    
-}
-
 stock_closing_price <- replicate(j_prices, 
                                   simulate_closing_price(n_days = n_days, 
                                                          price = stock_init_price, 
@@ -91,13 +214,15 @@ stock_closing_price <- replicate(j_prices,
 
 stock_closing_price_gains_pc    <- 100 * (stock_closing_price - stock_init_price) / stock_init_price
 stock_closing_price_percentiles <- quantile(stock_closing_price_gains_pc, 
-                                      c(0.1, .25, 0.33, 0.5, 0.66,  0.75, 0.9))
+                                      report_percentiles)
 
 mc_stock_prices <- data.frame(day = 1:n_days, 
                               price = price, 
                               trial = simulation)
 
-
+closing_price_colnum <- stringr::str_which(colnames(stock_dat), "[.]Close")
+plot(stock_dat[, closing_price_colnum], 
+     main = stock_ticker)
 ```
 
 ## A random walk of \$`r stock_ticker` over `r n_days` days
@@ -112,9 +237,10 @@ mc_stock_prices %>%
     geom_hline(yintercept = stock_init_price, lty = 2, color = "gray") +
     theme_bw() +
     theme(plot.title = element_text(hjust = 0.5),
-          plot.subtitle = element_text(hjust = 0.5)) + 
+          plot.subtitle = element_text(hjust = 0.5),
+          panel.grid.minor = element_blank()) + 
     guides(color = F) + 
-    labs(title =paste0("$", stock_ticker, " price simulation"),
+    labs(title =paste0("$", stock_ticker, " price simulation over ", round(n_days/252, 1), " years"),
          subtitle =paste0("Monte carlo simulation using price activity between\n", 
                           begin_date, " and ", end_date),
          color = "Trial",
@@ -161,13 +287,12 @@ voo_closing_price <- replicate(j_prices,
                                                       avg = voo_avg, 
                                                       stdev = voo_stdev))
 voo_closing_price_gains_pc <- 100 * (voo_closing_price - voo_price[1]) / voo_price[1]
-voo_closing_price_percentiles <- quantile(voo_closing_price_gains_pc, 
-                                      c(0.1, .25, 0.33, 0.5, 0.66,  0.75, 0.9))
+voo_closing_price_percentiles <- quantile(voo_closing_price_gains_pc, report_percentiles)
 
 # report out
 price_results <- data.frame(percentile = names(stock_closing_price_percentiles),
            stock_price = quantile(stock_closing_price,
-                                 c(0.1, .25, 0.33, 0.5, 0.66,  0.75, 0.9)),
+                                 report_percentiles),
           stock_closing_price_percentiles,
            voo_closing_price_percentiles) %>%
     mutate(stock_price = round(stock_price, 2),
@@ -177,6 +302,9 @@ price_results %>% kable(col.names = c("Percentile",
                         paste0(stock_ticker, " Final Price ($)"),
                         paste0(stock_ticker, " Price change (%)"),
                         paste0("VOO Price change (%)")))
+
+
+
 ```
 
 
@@ -201,5 +329,34 @@ stock_closing_price_gains_pc %>% data.frame(price = .) %>%
          subtitle = "Price distribution for $VOO (gray)",
          y = "Probability density",
          x = "Price performance (%)")
+```
+
+# Predict value of options
+
+Roche offers options per the Roche S-Sar Plan, which can be looked up at YourLifeYourRewards.com somewhere in the LTI menu offerings.  The SSARs are executed to provide stock per the formula:
+
+G = N x (PE – SP) ÷ PE
+Where:
+G = the number of Genussscheine to be delivered to the Participant, rounded to
+a whole number of Genussscheine
+N = total number of S-SARs exercised
+PE = the Price at Exercise
+SP = the Strike Price
+
+Strike price is defined as "The Strike Price of a particular S-SAR shall be stated in the S-SAR Grant Notice and shall be not less than the Market Value of a Genussschein on the Grant Date"
+
+Notice that Roche performs rounding to the nearest whole number.  There's an exploit to the SSAR system: the number of Genusscheine are given to you rounded to the nearest integer.  You want to transact the minimum number of SSARs that grant a Genusscheine
+
+```{r}
+sp <- c(251.90, 220.80) # 2017 and 2018 grants
+pe <- Cl(stock_dat)[end_date] %>% as.numeric()
+
+g <- (pe - sp) / pe
+
+transact_min[1] <- min(which(g[1] * 1:20 > 0.51))
+transact_min[2] <- min(which(g[2] * 1:20 > 0.51))
+transact_min
+
+# todo calculate value of SSAR option based on price and transact_min
 ```
 
